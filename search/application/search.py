@@ -31,15 +31,19 @@ logger = logging.getLogger(__name__)
 
 # fields
 class FunctionScoreMode(Enum):
+    FIRST = 'first'
     SUM = 'sum'
-    RANDOM = 2
-    DISTANCE_FIRST = 3
+    MAX = 'max'
+    MIN = 'min'
+    MULTIPLE = 'multiple'
+    AVG = 'avg'
 
 
 class InnerFieldScoreMode(Enum):
     FIRST = 'first'
     RANDOM = 'random'
     DISTANCE_FIRST = 'distance_first'
+    # random equals avg, and avgerage may be confusing
     AVG = 'avg'
 
 
@@ -49,29 +53,20 @@ def get_unique_list(norm_list):
     return res
 
 
-def get_inner_field_score_result(vids, topk, inner_field_score_mode: str):
-    # convert str to inner field score mode
-    try:
-        inner_field_score_mode = InnerFieldScoreMode(inner_field_score_mode)
-    except Exception as e:
-        raise WrongInnerFieldModeError("Unsupported inner field mode", e)
+def get_inner_field_score_result(vids, topk, inner_field_score_mode: InnerFieldScoreMode):
     res = []
     num_entity = len(vids)
     if num_entity == 1:
         return get_unique_list([x.id for x in vids[0]])
+
+    # fix topk number dut to milvus result
+    topk = min(topk, len(vids[0]))
     # begin to score
     if inner_field_score_mode == InnerFieldScoreMode.FIRST:
         return get_unique_list([x.id for x in vids[0]])
     if inner_field_score_mode == InnerFieldScoreMode.RANDOM:
-        idx = [0] * num_entity
-        while len(res) < topk:
-            tmp_random = random.randint(0, num_entity - 1)
-            if idx[tmp_random] >= topk: continue
-            tmp_id = vids[tmp_random][idx[tmp_random]].id
-            if tmp_id not in res: res.append(tmp_id)
-            idx[tmp_random] += 1
-        return res
-
+        tmp_random = random.randint(0, num_entity - 1)
+        return get_unique_list([x.id for x in vids[tmp_random]])
     if inner_field_score_mode == InnerFieldScoreMode.DISTANCE_FIRST:
         tmp = list(chain(*vids))
         tmp.sort(key=lambda s: (s.distance))
@@ -98,12 +93,24 @@ def get_score_result(fields_result, score_mode: str):
         score_mode = FunctionScoreMode(score_mode)
     except Exception as e:
         raise WrongFieldModeError("Unsupported function score mode", e)
-    for key, value in fields_result.items():
-        return value
+    if len(fields_result) == 1:
+        return list(fields_result.values())[0]
+    if score_mode == FunctionScoreMode.FIRST:
+        return list(fields_result.values())[0]
+    if score_mode == FunctionScoreMode.SUM:
+        pass
+    if score_mode == FunctionScoreMode.MULTIPLE:
+        pass
+    if score_mode == FunctionScoreMode.MAX:
+        pass
+    if score_mode == FunctionScoreMode.MIN:
+        pass
+    if score_mode == FunctionScoreMode.AVG:
+        pass
     raise WrongFieldModeError("Unimplemented function score mode", Exception())
 
 
-def search_and_score(milvus_collection_name, vectors, topk, nprobe, inner_score_mode):
+def search_and_score(milvus_collection_name, vectors, topk, nprobe, inner_score_mode: str):
     '''
     search vectors from milvus and score by inner field score mode
     :param milvus_collection_name: collection name will be search
@@ -119,6 +126,10 @@ def search_and_score(milvus_collection_name, vectors, topk, nprobe, inner_score_
     increase_rate = 0.1
     query_topk = topk + magic_number
     end_flag = False
+    try:
+        inner_score_mode = InnerFieldScoreMode(inner_score_mode)
+    except Exception as e:
+        raise WrongInnerFieldModeError("Unsupported inner field mode", e)
     while (len(result_dbs) < topk) and (not end_flag):
         # check query topk max value
         query_topk = min(query_topk, MAX_TOPK)
@@ -134,7 +145,8 @@ def search_and_score(milvus_collection_name, vectors, topk, nprobe, inner_score_
                 # calc a new query_topk and needn't to query from mysql
                 query_topk += math.ceil(query_topk * increase_rate)
                 increase_rate *= 2
-                continue
+                if not end_flag:
+                    continue
             end_flag = True
 
         result_dbs = search_ids_from_mapping(res_vids)
@@ -167,7 +179,7 @@ def search(name, fields={}, topk=10, nprobe=16):
             valid_field_flag = True
             file_data = value.get('data')
             url = value.get('url')
-            inner_score_mode = value.get('inner_field_score_mode', 'first')
+            inner_score_mode = value.get('inner_field_score_mode', 'distance_first')
 
             if not file_data and not url:
                 raise RequestError("can't find data or url from request", "")
@@ -185,7 +197,7 @@ def search(name, fields={}, topk=10, nprobe=16):
             fields_res[n] = tmp_res
         if not valid_field_flag:
             raise NoneValidFieldError("There is none valid field in search request boby", Exception())
-        score_mode = fields.get('score_mode', 'sum')
+        score_mode = fields.get('score_mode', 'first')
         res = get_score_result(fields_res, score_mode)
         return res
     except Exception as e:
