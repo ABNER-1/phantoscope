@@ -45,6 +45,7 @@ message Route {
     string operator = 1; // the name of the operator
     string operator_id = 2; // the id of the operator instance
     string operator_addr = 3; // the address of the operator instance
+    string prev_operator_id = 4; // the previous operator id helps handle multi branch in a pipeline
     google.protobuf.Timestamp start_time = 4; // receiving time
     google.protobuf.Timestamp end_time = 5; // sending (out) time
 }
