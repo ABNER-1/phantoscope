@@ -123,3 +123,6 @@ def run(vgg, images, urls):
     logging.info('%s cost: {:.3f}s, get %d results'.format(end - start),
                  "vgg16", len(vectors))
     return vectors
+
+if __name__=="__main__":
+    Vgg()

@@ -227,7 +227,7 @@ class MaskRCNNDetectObject:
             with self.session.as_default():
                 if not self.model_init:
                     self.load_model()
-                results = self.rcnn.detect([image])
+                results = self.rcnn.detect( [image])
                 bboxes = self.get_bboxes(
                     results[0]["rois"],
                     results[0]["scores"],
