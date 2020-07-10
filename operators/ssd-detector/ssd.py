@@ -140,44 +140,47 @@ class SSDDetectObject:
         from tensorflow.python.util import compat
 
         model_path = "model"
-        model_version = 5
+        model_version = 6
         export_path = os.path.join(compat.as_bytes(model_path), compat.as_bytes(str(model_version)))
-        with self.graph.as_default():
-            with self.session.as_default():
-                saver = tf.train.Saver()
-                saver.restore(self.session, "prefix")
-                builder = saved_model_builder.SavedModelBuilder(export_path)
 
-                image_tensor = self.graph.get_tensor_by_name('image_tensor:0')
-                boxes = self.graph.get_tensor_by_name('detection_boxes:0')
-                scores = self.graph.get_tensor_by_name('detection_scores:0')
-                classes = self.graph.get_tensor_by_name('detection_classes:0')
+        builder = saved_model_builder.SavedModelBuilder(export_path)
 
-                signature_name = 'predict_images'
+        image_tensor = self.graph.get_tensor_by_name('image_tensor:0')
+        boxes = self.graph.get_tensor_by_name('detection_boxes:0')
+        scores = self.graph.get_tensor_by_name('detection_scores:0')
+        classes = self.graph.get_tensor_by_name('detection_classes:0')
 
-                model_signature = signature_def_utils.build_signature_def(
-                    inputs={
-                        "images": utils.build_tensor_info(image_tensor)
-                    },
-                    outputs={
-                        "boxes": utils.build_tensor_info(boxes),
-                        "scores": utils.build_tensor_info(scores),
-                        "classes": utils.build_tensor_info(classes),
-                    },
-                    method_name=signature_constants.PREDICT_METHOD_NAME)
+        with tf.keras.backend.get_session() as sess:
+            tf.compat.v1.saved_model.simple_save(
+                self.session,
+                export_path,
+                inputs={
+                    "images": image_tensor
+                },
+                outputs={
+                    "boxes": boxes,
+                    "scores": scores,
+                    "classes": classes
+                })
 
-                legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
-
-                builder.add_meta_graph_and_variables(
-                    self.session, [tag_constants.SERVING],
-                    clear_devices=True,
-                    signature_def_map={
-                        signature_name:
-                            model_signature,
-                    },
-                    legacy_init_op=legacy_init_op)
-
-                builder.save()
+        # signature_name = 'predict_images'
+        #
+        # model_signature = signature_def_utils.build_signature_def(
+        #
+        #     signature_constants.PREDICT_METHOD_NAME)
+        #
+        # legacy_init_op = tf.group(tf.tables_initializer(), name='legacy_init_op')
+        #
+        # builder.add_meta_graph_and_variables(
+        #     self.session, [tag_constants.SERVING],
+        #     clear_devices=True,
+        #     signature_def_map={
+        #         signature_name:
+        #             model_signature,
+        #     },
+        #     legacy_init_op=legacy_init_op)
+        #
+        # builder.save()
 
     def fetch_resources(self):
         # model_tar_path = download_temp_file(DOWNLOAD_BASE + MODEL_FILE)
@@ -331,7 +334,8 @@ if __name__ == "__main__":
 
     body = json.dumps(body)
 
-    reply = requests.post("http://127.0.0.1:8501/v1/models/ssd/versions/3:predict", data=body)
+    reply = requests.post("http://127.0.0.1:8501/v1/models/ssd/versions/1:predict", data=body)
     res_json = reply.json()
 
     print(res_json)
+

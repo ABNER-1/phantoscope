@@ -222,12 +222,32 @@ class MaskRCNNDetectObject:
             obj_images.append(frame_object)
         return obj_images
 
+    def save_model(self):
+        from tensorflow.python.util import compat
+        model = self.rcnn.keras_model
+        model_path = "model"
+        model_version = 1
+        model_signature = tf.saved_model.signature_def_utils.predict_signature_def(
+            inputs={'input': model.input}, outputs={'output': model.output})
+        export_path = os.path.join(compat.as_bytes(model_path), compat.as_bytes(str(model_version)))
+
+        builder = tf.saved_model.builder.SavedModelBuilder(export_path)
+        builder.add_meta_graph_and_variables(
+            sess=self.session,
+            tags=[tf.saved_model.tag_constants.SERVING],
+            clear_devices=True,
+            signature_def_map={
+                tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY:
+                    model_signature
+            })
+        builder.save()
+
     def execute(self, image):
         with self.graph.as_default():
             with self.session.as_default():
                 if not self.model_init:
                     self.load_model()
-                results = self.rcnn.detect( [image])
+                results = self.rcnn.detect([image])
                 bboxes = self.get_bboxes(
                     results[0]["rois"],
                     results[0]["scores"],
@@ -324,3 +344,8 @@ def run(detector, images, urls):
     logging.info('%s cost: {:.3f}s, get %d results'.format(end - start),
                  "mask-rcnn detector", len(result_images))
     return result_images
+
+
+if __name__ == "__main__":
+    rcnn = MaskRCNNDetectObject()
+    rcnn.save_model()

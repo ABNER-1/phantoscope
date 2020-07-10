@@ -22,12 +22,21 @@ class Xception:
         self.input_shape = (299, 299, 3)
         self.weight = 'imagenet'
         self.pooling = 'avg'
-        self.load_config()
+        # self.load_config()
+        self.model = KerasXception(weights=self.weight,
+                                   input_shape=(self.input_shape[0],
+                                                self.input_shape[1],
+                                                self.input_shape[2]),
+                                   pooling=self.pooling,
+                                   include_top=False)
+        self.model.trainable = False
+        self.model.predict(np.zeros(
+            (1, self.input_shape[0], self.input_shape[1], 3)))
 
     def load_config(self):
         # read model config from environment
         self.device_str = os.environ.get("device_id", "/cpu:0")
-        self.user_config = tf.ConfigProto(allow_soft_placement=False)
+        self.user_config = tf.compat.v1.ConfigProto(allow_soft_placement=False)
         gpu_mem_limit = float(os.environ.get("gpu_mem_limit", 0.3))
         self.user_config.gpu_options.per_process_gpu_memory_fraction = gpu_mem_limit
         self.user_config.gpu_options.allow_growth = True
@@ -39,7 +48,7 @@ class Xception:
         self.graph = tf.Graph()
         with self.graph.as_default():
             with tf.device(self.device_str):
-                self.session = tf.Session(config=self.user_config, graph=self.graph)
+                self.session = tf.compat.v1.Session(config=self.user_config, graph=self.graph)
                 KTF.set_session(self.session)
                 self.model = KerasXception(weights=self.weight,
                                            input_shape=(self.input_shape[0],
@@ -72,6 +81,27 @@ class Xception:
         norm_feat = feat[0] / LA.norm(feat[0])
         norm_feat = [i.item() for i in norm_feat]
         return norm_feat
+
+    def save_model(self):
+        from tensorflow.python.util import compat
+        model = self.model
+        model_path = "model"
+        model_version = 3
+
+        # model_signature = tf.saved_model.signature_def_utils.predict_signature_def(
+        #     inputs={'input': model.input}, outputs={'output': model.output})
+        # export_path = os.path.join(compat.as_bytes(model_path), compat.as_bytes(str(model_version)))
+        model.save("mymodel")
+        # builder = tf.saved_model.builder.SavedModelBuilder(export_path)
+        # builder.add_meta_graph_and_variables(
+        #     sess=self.session,
+        #     tags=[tf.saved_model.tag_constants.SERVING],
+        #     clear_devices=True,
+        #     signature_def_map={
+        #         tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY:
+        #             model_signature
+        #     })
+        # builder.save()
 
     @property
     def name(self):
@@ -150,3 +180,28 @@ def run(xception, images, urls):
     end = time.time()
     logging.info('%s cost: {:.3f}s'.format(end - start), "xception")
     return vectors
+
+if __name__ == "__main__":
+    # rcnn = Xception()
+    # rcnn.save_model()
+
+    import tensorflow as tf
+
+    # The export path contains the name and the version of the model
+    tf.keras.backend.set_learning_phase(0)  # Ignore dropout at inference
+
+    model = KerasXception(weights="imagenet",
+                               pooling='avg',
+                               include_top=False)
+
+    export_path = './my_image_classifier/1'
+
+    # Fetch the Keras session and save the model
+    # The signature definition is defined by the input and output tensors
+    # And stored with the default serving key
+    with tf.keras.backend.get_session() as sess:
+        tf.saved_model.simple_save(
+            sess,
+            export_path,
+            inputs={'input_image': model.input},
+            outputs={t.name: t for t in model.outputs})
