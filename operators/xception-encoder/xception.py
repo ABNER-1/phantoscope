@@ -181,27 +181,38 @@ def run(xception, images, urls):
     logging.info('%s cost: {:.3f}s'.format(end - start), "xception")
     return vectors
 
+
 if __name__ == "__main__":
-    # rcnn = Xception()
-    # rcnn.save_model()
+    img_path = '/home/abner/Desktop/image/timg.jpeg'
+    img = image.load_img(
+        img_path,
+        target_size=(299, 299))
+    img = image.img_to_array(img)
+    img = np.expand_dims(img, axis=0)
+    img = preprocess_input_xception(img)
 
-    import tensorflow as tf
+    # body = [{"input_image": img.tolist()}]
+    # body = img.tolist()
 
-    # The export path contains the name and the version of the model
-    tf.keras.backend.set_learning_phase(0)  # Ignore dropout at inference
+    # body = {
+    #     "input_image": img.tolist()
+    # }
+    import pandas as pd
 
-    model = KerasXception(weights="imagenet",
-                               pooling='avg',
-                               include_top=False)
+    midx = pd.MultiIndex.from_product([np.arange(0, 1), np.arange(0, 299), np.arange(0, 299), np.arange(0, 3)])
+    pd_df = pd.DataFrame(img.flatten(), index=midx)
+    print(pd_df)
+    # import pandas as pd
+    # pd_df = pd.DataFrame(img)
+    # print(pd_df)
+    import requests
 
-    export_path = './my_image_classifier/1'
+    body = pd_df.to_json(orient='split')
 
-    # Fetch the Keras session and save the model
-    # The signature definition is defined by the input and output tensors
-    # And stored with the default serving key
-    with tf.keras.backend.get_session() as sess:
-        tf.saved_model.simple_save(
-            sess,
-            export_path,
-            inputs={'input_image': model.input},
-            outputs={t.name: t for t in model.outputs})
+    headers = {
+        'Content-Type': 'application/json',
+    }
+    reply = requests.post("http://127.0.0.1:6000/invocations", headers=headers, data=body)
+    res_json = reply.json()
+
+    print(res_json)
