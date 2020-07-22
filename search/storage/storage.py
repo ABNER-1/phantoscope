@@ -12,6 +12,7 @@
 import os
 import json
 import logging
+from functools import reduce
 import pymongo
 from bson.objectid import ObjectId
 from bson.json_util import dumps
@@ -153,7 +154,11 @@ class MongoIns:
                                          password=MONGO_PASSWORD)
             db = client.phantoscope
             res = getattr(db, name).find({f"{field_name}.ids": {"$in": ids}})
-            return list(res)
+            res = list(res)
+            max_idx = len(ids) + 1
+            res.sort(key=lambda item: reduce(lambda x, y: min(x, y),
+                                             [ids.index(x) if x in ids else max_idx for x in item[field_name]['ids']]))
+            return res
         except Exception as e:
             raise e
 
