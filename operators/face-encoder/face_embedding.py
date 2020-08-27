@@ -188,5 +188,5 @@ def run(face_encoder, images, urls):
     except Exception as e:
         logging.error("something error: %s", str(e), exc_info=True)
     end = time.time()
-    logging.info('%s cost: {:.3f}s'.format(end - start), "face_embedding encoder")
+    logging.info('%s cost: {:.3f}s'.format(end - start), "face_embedding encoder ")
     return vectors
